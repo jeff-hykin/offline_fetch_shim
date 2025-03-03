@@ -114,10 +114,6 @@ export function convertRequestObjToId(requestObject) {
     )
 }
 
-export function requestsAreEqual(requestJson, realRequestObject) {
-    return convertOfflineRequestToId(request) === convertRequestObjToId(realRequestObject)
-}
-
 export function responseJsonToResponseObject(jsonObj) {
     const headers = new Headers()
     for (const { name, value } of jsonObj.headers) {
@@ -147,7 +143,8 @@ export function createFetchShim(
         convertOfflineRequestToId=convertOfflineRequestToId,
         convertRequestObjToId=convertRequestObjToId,
         convertOfflineDataToResponseObject=responseJsonToResponseObject,
-        debugHookForNonMatchingRequests=({ realRequestObject, requestId, idToResponseTable, idToOfflineRequestTable }) => {},
+        hookForNonMatchingRequests=({ realRequestObject, requestId, idToResponseTable, idToOfflineRequestTable }) => {},
+        ignoreRequestIdCollisions=false,
         fetch=globalThis.fetch,
     }={}
 ) {
@@ -164,6 +161,9 @@ export function createFetchShim(
         }
         const requestId = String(convertOfflineRequestToId(requestJson))
         allReqestIds.add(requestId)
+        if (!ignoreRequestIdCollisions && idToRequest[requestId]) {
+            console.warn(`Two different requests have the same requestId`, "\nprevious one was:", JSON.stringify(idToRequest[requestId]), "next one is:", JSON.stringify(requestJson), `\n\nThis means you need to give a better \`convertOfflineRequestToId\` argument to the createFetchShim() function like this:\n    createFetchShim(harData, { convertOfflineRequestToId: (req)=>JSON.stringify({url: req.url, method: req.method, }) })`)
+        }
         idToRequest[requestId] = requestJson
         idToResponse[requestId] = ()=>convertOfflineDataToResponseObject(responseJson)
     }
@@ -173,12 +173,15 @@ export function createFetchShim(
         // e.g. url, method, postData
         const requestId = convertRequestObjToId(requestObject, url, options)
         if (!allReqestIds.has(requestId)) {
-            debugHookForNonMatchingRequests({
+            var output = hookForNonMatchingRequests({
                 realRequestObject: requestObject,
                 requestId,
                 idToResponseTable: idToResponse,
                 idToOfflineRequestTable: idToRequest,
             })
+            if (output) {
+                return output
+            }
             return fetch(url, options)
         }
         return Promise.resolve(idToResponse[requestId]())
