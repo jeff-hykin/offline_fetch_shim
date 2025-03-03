@@ -16,7 +16,7 @@ const fetchWithCache = createFetchShim(harData, { fetch })
 // if you control the getting-shimmed code, then just call the variable "fetch" at the top of the file
 
 // if you don't control it, then you can monkey patch globalThis.fetch, and then import it
-// NOTE: if it doesn't match anything in the HAR data, it will just use the ONLINE/original fetch
+// NOTE: if a request doesn't match anything in the HAR data, it will just use the ONLINE/original fetch
 monkeyPatch(globalThis, "fetch", (originalFetch)=>fetchWithCache) // NOTE: no ()'s on fetchReplacement
 ```
 
@@ -37,6 +37,8 @@ const hook = ({ realRequestObject, requestId, idToResponseTable, idToOfflineRequ
     // if you know what you want to respond with, you can manually do that here by returning a response object
     // (there's better ways, but sometimes this is enough when you're only patching 1 thing)
     // NOTE: if you need async, then respond with a Promise object (don't make the hook async, otherwise it'll always respond)
+    
+    // if you want to FORCE everything to be offline, throw an error in this hook
 }
 
 // fine grain control
