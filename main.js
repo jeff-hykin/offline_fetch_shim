@@ -125,19 +125,9 @@ export function fetchArgsToRequestObject(urlOrRequest, options=undefined, {windo
 }
 
 export function convertRequestObjToId(requestObject) {
-    // 
-    // extract url and params
-    // 
-    const url = requestObject.url
-
-    // 
-    // extract method
-    // 
-    const method = requestObject.method
-
     // const { credentials, headers, referrer, method, mode, body, redirect } = options
     let postData = { encoding: undefined, text: undefined }
-    if (method === 'POST') {
+    if (requestObject.method === 'POST') {
         var requestCopy = requestObject.clone()
         try {
             postData.text = requestCopy.text()
@@ -147,7 +137,7 @@ export function convertRequestObjToId(requestObject) {
         }
     }
     return hashCode(
-        JSON.stringify({url, method, postData})
+        JSON.stringify({url: requestObject.url, method: requestObject.method, postData})
     )
 }
 
