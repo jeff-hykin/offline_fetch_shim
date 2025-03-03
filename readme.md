@@ -9,7 +9,7 @@ If there's some JS code that uses fetch, and you want to make it work offline (m
 2. Create a shim of `fetch` in your code this:
 
 ```js
-import { createFetchShim, monkeyPatch } from 'https://esm.sh/gh/jeff-hykin/offline_fetch_shim/main.js'
+import { createFetchShim, monkeyPatch } from 'https://esm.sh/gh/jeff-hykin/offline_fetch_shim@0.0.1.0/main.js'
 
 const harData = { /*paste your HAR data here*/ }
 const fetchWithCache = createFetchShim(harData, { fetch })
