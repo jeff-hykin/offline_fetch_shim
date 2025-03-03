@@ -2,6 +2,27 @@
     // (yeah it says "dont use" but whatever)
     // https://w3c.github.io/web-performance/specs/HAR/Overview.html#sec-object-types-params
 
+export function monkeyPatch(object, attrName, createNewFunction) {
+    let prevObj = null
+    while (!Object.getOwnPropertyNames(object).includes(attrName)) {
+        prevObj = object
+        object = Object.getPrototypeOf(object)
+        if (prevObj === object) {
+            throw new Error(`Could not find ${attrName} on ${object}`)
+        }
+    }
+    const originalFunction = object[attrName]
+    let theThis
+    const wrappedOriginal = function(...args) {
+        return originalFunction.apply(theThis, args)
+    }
+    const innerReplacement = createNewFunction(wrappedOriginal)
+    object[attrName] = function(...args) {
+        theThis = this
+        return innerReplacement.apply(this, args)
+    }
+}
+
 export function hashCode(str) {
     let hash = 0;
     for (let i = 0, len = str.length; i < len; i++) {
