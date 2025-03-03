@@ -4,7 +4,7 @@ If there's some JS code that uses fetch, and you want to make it work offline (m
 
 # How to use
 
-1. Get the data offline data  
+1. Get the data offline data as a HAR file
     - If the code runs in a browser, open up the broswers debugging window, go to the network tab, reload the page, righ click any network request, hover over "copy value", then click "Save all as HAR". (This works on FireFox for sure, but should be available in most browsers ])
 2. Create a shim of `fetch` in your code this:
 
