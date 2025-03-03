@@ -70,11 +70,83 @@ export function hashCode(str) {
     return hash;
 }
 
-export function convertOfflineRequestToId(request) {
+/**
+ *
+ * @example
+ * ```js
+ * var req = {
+ *     "bodySize": 0,
+ *     "method": "GET",
+ *     "url": "http://127.0.0.1:8080/locales/en/translation.json",
+ *     "httpVersion": "HTTP/1.1",
+ *     "headers": [
+ *       {
+ *         "name": "Host",
+ *         "value": "127.0.0.1:8080"
+ *       },
+ *       {
+ *         "name": "User-Agent",
+ *         "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:133.0) Gecko/20100101 Firefox/133.0"
+ *       },
+ *       {
+ *         "name": "Accept-Language",
+ *         "value": "en-US,en;q=0.5"
+ *       },
+ *       {
+ *         "name": "Accept-Encoding",
+ *         "value": "gzip, deflate, br, zstd"
+ *       },
+ *       {
+ *         "name": "Referer",
+ *         "value": "http://127.0.0.1:8080/"
+ *       },
+ *       {
+ *         "name": "Sec-GPC",
+ *         "value": "1"
+ *       },
+ *       {
+ *         "name": "Connection",
+ *         "value": "keep-alive"
+ *       },
+ *       {
+ *         "name": "Sec-Fetch-Dest",
+ *         "value": "empty"
+ *       },
+ *       {
+ *         "name": "Sec-Fetch-Mode",
+ *         "value": "cors"
+ *       },
+ *       {
+ *         "name": "Sec-Fetch-Site",
+ *         "value": "same-origin"
+ *       },
+ *       {
+ *         "name": "Priority",
+ *         "value": "u=4"
+ *       },
+ *       {
+ *         "name": "Pragma",
+ *         "value": "no-cache"
+ *       },
+ *       {
+ *         "name": "Cache-Control",
+ *         "value": "no-cache"
+ *       }
+ *     ],
+ *     "cookies": [],
+ *     "queryString": [],
+ *     "headersSize": 454
+ *    }
+ *    console.log("requestId:",convertOfflineRequestToIdDefault(req))
+ *    ```
+ */
+export function convertOfflineRequestToIdDefault(request) {
     if (!request) {
         return null
     }
-    return hashCode(JSON.stringify({url: request.url, method: request.method, postData: { encoding: request.postData?.encoding, text: request.postData?.text,}}))
+    return hashCode(
+        JSON.stringify({url: request.url, method: request.method, postData: { encoding: request.postData?.encoding, text: request.postData?.text,}})
+    )
 }
 
 export function fetchArgsToRequestObject(urlOrRequest, options=undefined, {windowLocationHref=globalThis.window?.location?.href}={}) {
@@ -88,6 +160,9 @@ export function fetchArgsToRequestObject(urlOrRequest, options=undefined, {windo
                     urlOrRequest = new URL(`${windowLocationHref}/${urlOrRequest}`)
                 }
             }
+        }
+        if (typeof urlOrRequest == 'string') {
+            urlOrRequest = new URL(urlOrRequest)
         }
     }
 
@@ -124,7 +199,7 @@ export function fetchArgsToRequestObject(urlOrRequest, options=undefined, {windo
     return request
 }
 
-export function convertRequestObjToId(requestObject) {
+export function convertRequestObjToIdDefault(requestObject) {
     // const { credentials, headers, referrer, method, mode, body, redirect } = options
     let postData = { encoding: undefined, text: undefined }
     if (requestObject.method === 'POST') {
@@ -132,6 +207,7 @@ export function convertRequestObjToId(requestObject) {
         try {
             postData.text = requestCopy.text()
         } catch (error) {
+            // TODO: check me, this could be a source of edgecase problems (the btoa() call)
             postData.text = btoa( requestCopy.bytes() )
             postData.encoding = "base64"
         }
@@ -141,10 +217,10 @@ export function convertRequestObjToId(requestObject) {
     )
 }
 
-export function responseJsonToResponseObject(jsonObj) {
+export function responseJsonToResponseObjectDefault(jsonObj) {
     const headers = new Headers()
     for (const { name, value } of jsonObj.headers) {
-        headers.append(key, value)
+        headers.append(name, value)
     }
     if (jsonObj.content?.mimeType) {
         headers.set("Content-Type", jsonObj.content.mimeType)
@@ -153,10 +229,11 @@ export function responseJsonToResponseObject(jsonObj) {
     if (jsonObj.content?.text) {
         body = jsonObj.content.text
         if (jsonObj.content?.encoding === "base64") {
+            // TODO: check me, this could be a source of edgecase problems
             body = atob(body)
         }
     }
-    
+
     return new Response(body, {
         status: jsonObj.status,
         statusText: jsonObj.statusText,
@@ -164,15 +241,28 @@ export function responseJsonToResponseObject(jsonObj) {
     })
 }
 
+/**
+ * createFetchShim
+ *
+ * @example
+ * ```js
+ * import lesspassHarString from "./test_data/lesspass.har.binaryified.js"
+ * const harData = JSON.parse(lesspassHarString)
+ * const fetch = createFetchShim(harData)
+ * let res = await fetch("http://127.0.0.1:8080/locales/en/translation.json")
+ * console.log("expect a 404: ", await res.text())
+ * ```
+ */
+const globalFetch = globalThis.fetch
 export function createFetchShim(
     harData,
     {
-        convertOfflineRequestToId=convertOfflineRequestToId,
-        convertRequestObjToId=convertRequestObjToId,
-        convertOfflineDataToResponseObject=responseJsonToResponseObject,
-        hookForNonMatchingRequests=({ realRequestObject, requestId, idToResponseTable, idToOfflineRequestTable }) => {},
+        convertOfflineRequestToId=convertOfflineRequestToIdDefault,
+        convertRequestObjToId=convertRequestObjToIdDefault,
+        convertOfflineDataToResponseObject=responseJsonToResponseObjectDefault,
+        hookForNonMatchingRequests=({ realRequestObject, requestId, idToResponseTable, idToOfflineRequestTable, urlToIds }) => {},
         ignoreRequestIdCollisions=false,
-        fetch=globalThis.fetch,
+        fetch=globalFetch,
     }={}
 ) {
     const allReqestIds = new Set()
@@ -194,7 +284,7 @@ export function createFetchShim(
         idToRequest[requestId] = requestJson
         idToResponse[requestId] = ()=>convertOfflineDataToResponseObject(responseJson)
     }
-    
+    const outerFetch = fetch
     return function fetch(url, options) {
         const requestObject = fetchArgsToRequestObject(url, options)
         // e.g. url, method, postData
@@ -205,11 +295,12 @@ export function createFetchShim(
                 requestId,
                 idToResponseTable: idToResponse,
                 idToOfflineRequestTable: idToRequest,
+                urlToIds: (url)=>Object.entries(idToRequest).filter(([id, request])=>request.url == url).map(([id])=>id),
             })
             if (output) {
                 return output
             }
-            return fetch(url, options)
+            return outerFetch(url, options)
         }
         return Promise.resolve(idToResponse[requestId]())
     }
