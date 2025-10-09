@@ -1,6 +1,8 @@
 import { hashCode, requestToObject, responseDataToResponse } from './tools/standalone.js'
 import { toRepresentation } from './tools/generic.js'
 
+const realFetch = globalThis.fetch
+
 /**
  * Creates a fetch shim that intercepts fetch requests and serves offline responses based on a mapping.
  *
