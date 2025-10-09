@@ -83,7 +83,7 @@ export class FetchRecording {
     }
 }
 
-let defaultRecorder
+export let defaultRecorder
 export function simpleRecorderStart() {
     if (!defaultRecorder) {
         defaultRecorder = new FetchRecording()
@@ -106,11 +106,13 @@ export function simpleRecorderStop() {
     if (defaultRecorder) {
         defaultRecorder.stop()
     }
+    const recording = defaultRecorder.getRecording()
     const isBrowser = !!globalThis.document
     if (isBrowser) {
-        downloadAsJsFile('fetch_recording.js', `export default ${defaultRecorder.getRecording()}`)
+        downloadAsJsFile('fetch_recording.js', `export default ${recording}`)
     }
-    return defaultRecorder.getRecording()
+    defaultRecorder = undefined
+    return recording
 }
 
 /**
