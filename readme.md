@@ -4,26 +4,57 @@ If there's some JS code that uses fetch, and you want to make it work offline (m
 
 # How to use
 
+## If you're using a browser
+
 1. Get the data offline data as a HAR file
-    - If the code runs in a browser, open up the broswers debugging window, go to the network tab, reload the page, righ click any network request, hover over "copy value", then click "Save all as HAR". (This works on FireFox for sure, but should be available in most browsers)
+    - If the code runs in a browser, open up the broswers debugging window, go to the network tab, reload the page, right click any network request, hover over "copy value", then click "Save all as HAR". (This works on FireFox for sure, but should be available in most browsers)
 2. Create a shim of `fetch` in your code this:
 
 ```js
-import { createFetchShim, monkeyPatch } from 'https://esm.sh/gh/jeff-hykin/offline_fetch_shim@0.0.1.0/main.js'
+import { createFetchShim } from 'https://esm.sh/gh/jeff-hykin/offline_fetch_shim@0.0.1.0/main.js'
 
 const harData = { /*paste your HAR data here*/ }
-const fetchWithCache = createFetchShim(harData, { fetch })
-// if you control the getting-shimmed code, then just call the variable "fetch" at the top of the file
+// Note: setting the globalThis.fetch is not required, but its likely what will be needing
+globalThis.fetch = createFetchShim(harData, { fetch })
+```
 
-// if you don't control it, then you can monkey patch globalThis.fetch, and then import it
-// NOTE: if a request doesn't match anything in the HAR data, it will just use the ONLINE/original fetch
-monkeyPatch(globalThis, "fetch", (originalFetch)=>fetchWithCache) // NOTE: no ()'s on fetchReplacement
+## If you're using Deno / Bun
+
+First run a simple recording pass. Start the deno repl `deno -A repl` and run:
+
+```js
+// setup the fetch-recording
+import { printData, getData } from 'https://esm.sh/gh/jeff-hykin/offline_fetch_shim@0.0.1.0/quick_record.js'
+// import LIBRARY YOU WANT TO WORK OFFLINE HERE
+// (make sure it triggers the downloads, may have to call methods of the library)
+
+// copy the printed data
+printData()
+// alternatively, save the data to a file
+Deno.writeTextFileSync('fetch_recording.js', `export default ${getData()}`)
+```
+
+After the data is recorded, it can be replayed:
+
+```js
+import { createFetchShim } from 'https://esm.sh/gh/jeff-hykin/offline_fetch_shim@0.0.1.0/recorder.js'
+
+const data = { /*paste the printed output here*/ }
+// alternatively load the data from a file
+import data from './fetch_recording.js'
+
+// shim fetch
+globalThis.fetch = createFetchShim(data, { fetch })
+
+// NOTE: if the library is not dynamically imported, there is a problem that the shim will not be active at the time that the library loads
+// there are ways around this with bundlers, but that'll be up to you
+let library = await import("LIBRARY YOU WANT TO WORK OFFLINE HERE")
 ```
 
 
 ## Debugging & Options
 
-While lots of times it'll "just work", sometimes you need custom handling. We've got all the custom handling.
+While lots of times it'll "just work", sometimes you need custom handling.
 
 ```js
 // start with debugging
