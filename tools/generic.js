@@ -1,10 +1,3 @@
-import { requestToObject, objectToRequest } from './standalone.js'
-import * as Yaml from './yaml.js'
+import { toRepresentation as baseToRepresentation } from 'https://esm.sh/gh/jeff-hykin/good-js@1.18.2.0/source/flattened/to_representation.js'
 
-export async function serializeFetchArgs(resource, options) {
-    return yaml.stringify(await requestToObject(new Request(url, options)))
-}
-
-export function deserializeFetchArg(dataString) {
-    return objectToRequest(yaml.parse(dataString))
-}
+export const toRepresentation = (arg)=>baseToRepresentation(arg, { simplified: false})
