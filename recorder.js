@@ -1,7 +1,8 @@
-import { serializeFetchArgs, deserializeFetchArg, } from './tools/generic.js'
+// import { serializeFetchArgs, deserializeFetchArg, } from './tools/generic.js'
 import { hashCode, monkeyPatch, requestToObject, objectToRequest, wrapAndRecordResponse, responseDataToResponse } from './tools/standalone.js'
-import { toRepresentation } from 'https://esm.sh/gh/jeff-hykin/good-js@1.18.2.0/source/flattened/to_representation.js'
+import { toRepresentation as baseToRepresentation } from 'https://esm.sh/gh/jeff-hykin/good-js@1.18.2.0/source/flattened/to_representation.js'
 
+const toRepresentation = (arg)=>baseToRepresentation(arg, { simplified: false})
 export { monkeyPatch }
 
 const realFetch = globalThis.fetch
@@ -13,13 +14,13 @@ export async function shimmedFetch(resource, options) {
     }
     fetchIndex++
     const request = new Request(resource, options)
-    const requestObj = requestToObject(request)
+    const requestObj = await requestToObject(request)
     requestObj.fetchIndex = fetchIndex
     Object.freeze(requestObj)
     const recordersToSet = []
     // const serialized = await serializeFetchArgs(resource, options)
     for (const eachRecorder of activeRecorders) {
-        const id = eachRecorder.requestDataToIdFunc(requestObj)
+        const id = await eachRecorder.requestDataToIdFunc(requestObj, {hashString:eachRecorder.hashString, serialize:eachRecorder.serialize})
         eachRecorder.requestDataToId.set(requestObj, id)
         if (id) {
             if (!eachRecorder.idToResponseData[id]) {
@@ -57,10 +58,12 @@ export async function shimmedFetch(resource, options) {
  * 
  */
 export class FetchRecording {
-    constructor({ requestDataToIdFunc=(reqData, {hashString, serialize})=>hashString(serialize(reqData)) }={}) {
+    constructor({ requestDataToIdFunc=(reqData, {hashString, serialize}={})=>hashString(serialize(reqData)), hashString=hashCode, serialize=toRepresentation } = {}) {
         this.requestDataToId = new Map()
         this.idToResponseData = {}
         this.requestDataToIdFunc = requestDataToIdFunc
+        this.hashString = hashString
+        this.serialize = serialize
     }
     start() {
         if (globalThis.fetch === realFetch) {
@@ -160,12 +163,11 @@ export function createFetchShim(
     const idToResponseGetters = {}
     for (const [requestData, id] of requestDataToId.entries()) {
         const requestId = String(requestDataToIdFunc(requestData, { hashString, serialize }))
-        idToRequest[requestId] = requestData
         allRequestIds.add(requestId)
         if (!ignoreRequestIdCollisions && idToRequest[requestId]) {
-            console.warn(`Two different requests have the same requestId`, "\nprevious one was:", JSON.stringify(idToRequest[requestId]), "next one is:", JSON.stringify(requestJson), `\n\nThis means you need to give a better \`convertOfflineRequestToId\` argument to the createFetchShim() function like this:\n    createFetchShim(harData, { convertOfflineRequestToId: (req)=>JSON.stringify({url: req.url, method: req.method, }) })`)
+            console.warn(`Two different requests have the same requestId`, "\nprevious one was:", baseToRepresentation(idToRequest[requestId]), "next one is:", baseToRepresentation(requestData), `\n\nThis means you need to give a better \`convertOfflineRequestToId\` argument to the createFetchShim() function like this:\n    createFetchShim({...data, requestDataToIdFunc: (req, { hashString, serialize })=>\`\${req.url}:\${req.method}\`})\n\n`)
         }
-        idToRequest[requestId] = requestJson
+        idToRequest[requestId] = requestData
         idToResponseGetters[requestId] = ()=>responseDataToResponse(idToResponseData[requestId])
     }
     const outerFetch = fetch
@@ -173,7 +175,7 @@ export function createFetchShim(
         const request = new Request(resource, options)
         const requestData = requestToObject(request)
         // e.g. resource, method, postData
-        const requestId = convertRequestDataToIdFunc(requestData, resource, options)
+        const requestId = requestDataToIdFunc(requestData, { hashString, serialize, originalArgs: [resource, options]})
         if (!allRequestIds.has(requestId)) {
             var output = hookForNonMatchingRequests({
                 realRequestObject: request,

@@ -333,7 +333,7 @@ export function wrapAndRecordResponse(response) {
         return data
     }))
     monkeyPatch(response, 'arrayBuffer', (originalMethod) => () => originalMethod().then((data) => {
-        recordedData.arrayBuffer = data.slice(0) // clone
+        recordedData.arrayBuffer = new Uint8Array(data)
         return data
     }))
     monkeyPatch(response, 'formData', (originalMethod) => () => originalMethod().then((data) => {
@@ -407,7 +407,7 @@ export function wrapAndRecordResponse(response) {
  * @param {any|null} meta.json
  * @param {string|null} meta.text
  * @param {Blob|null} meta.blob
- * @param {ArrayBuffer|null} meta.arrayBuffer
+ * @param {Uint8Array|null} meta.arrayBuffer
  * @param {Object|null} meta.formData
  * @param {Array<Uint8Array>} meta.streamChunks
  * @returns {Response}
@@ -416,7 +416,11 @@ export function responseDataToResponse(meta) {
     let body = undefined
 
     if (meta.arrayBuffer) {
-        body = meta.arrayBuffer
+        if (!(meta.arrayBuffer instanceof ArrayBuffer)) {
+            body = meta.arrayBuffer.buffer
+        } else {
+            body = meta.arrayBuffer
+        }
     } else if (meta.blob) {
         body = meta.blob
     } else if (meta.json !== null && meta.json !== undefined) {
