@@ -110,6 +110,7 @@ export function simpleRecorderStop() {
     if (isBrowser) {
         downloadAsJsFile('fetch_recording.js', `export default ${defaultRecorder.getRecording()}`)
     }
+    return defaultRecorder.getRecording()
 }
 
 /**
