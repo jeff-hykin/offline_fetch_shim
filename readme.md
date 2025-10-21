@@ -11,7 +11,7 @@ If there's some JS code that uses fetch, and you want to make it work offline (m
 2. Create a shim of `fetch` in your code this:
 
 ```js
-import { createFetchShim } from 'https://esm.sh/gh/jeff-hykin/offline_fetch_shim@0.0.1.0/main.js'
+import { createFetchShim } from 'https://esm.sh/gh/jeff-hykin/offline_fetch_shim/main.js'
 
 const harData = { /*paste your HAR data here*/ }
 // Note: setting the globalThis.fetch is not required, but its likely what will be needing
@@ -24,7 +24,7 @@ First run a simple recording pass. Start the deno repl `deno -A repl` and run:
 
 ```js
 // setup the fetch-recording
-import { printData, getData } from 'https://esm.sh/gh/jeff-hykin/offline_fetch_shim@0.0.1.0/quick_record.js'
+import { printData, getData } from 'https://esm.sh/gh/jeff-hykin/offline_fetch_shim/quick_record.js'
 // import LIBRARY YOU WANT TO WORK OFFLINE HERE
 // (make sure it triggers the downloads, may have to call methods of the library)
 
@@ -37,7 +37,7 @@ Deno.writeTextFileSync('fetch_recording.js', `export default ${getData()}`)
 After the data is recorded, it can be replayed:
 
 ```js
-import { createFetchShim } from 'https://esm.sh/gh/jeff-hykin/offline_fetch_shim@0.0.1.0/recorder.js'
+import { createFetchShim } from 'https://esm.sh/gh/jeff-hykin/offline_fetch_shim/recorder.js'
 
 const data = { /*paste the printed output here*/ }
 // alternatively load the data from a file
