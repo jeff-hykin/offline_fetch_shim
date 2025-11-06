@@ -22,16 +22,23 @@ export async function shimmedFetch(resource, options) {
     for (const eachRecorder of activeRecorders) {
         const id = await eachRecorder.requestDataToIdFunc(requestObj, {hashString:eachRecorder.hashString, serialize:eachRecorder.serialize})
         eachRecorder.requestDataToId.set(requestObj, id)
+        let index = -1
+        for (const [key, value] of eachRecorder.requestDataToId.entries()) {
+            index++
+            if (key == requestObj) {
+                break
+            }
+        }
         if (id) {
-            if (!eachRecorder.idToResponseData[id]) {
-                recordersToSet.push([eachRecorder, id])
+            if (!eachRecorder.requestIndexToResponseData[index]) {
+                recordersToSet.push([eachRecorder, id, index])
             }
         }
     }
-    return realFetch(request).then(response => {
-        var [ response, recordedData ] = wrapAndRecordResponse(response)
-        for (const [recorder, requestId] of recordersToSet) {
-            recorder.idToResponseData[requestId] = recordedData
+    return realFetch(resource, options).then(response => {
+        var [ response, recordedData] = wrapAndRecordResponse(response)
+        for (const [recorder, requestId, index] of recordersToSet) {
+            recorder.requestIndexToResponseData[index] = recordedData
         }
         return response
     })
@@ -60,7 +67,7 @@ export async function shimmedFetch(resource, options) {
 export class FetchRecording {
     constructor({ requestDataToIdFunc=(reqData, {hashString, serialize}={})=>hashString(serialize(reqData)), hashString=hashCode, serialize=toRepresentation } = {}) {
         this.requestDataToId = new Map()
-        this.idToResponseData = {}
+        this.requestIndexToResponseData = {}
         this.requestDataToIdFunc = requestDataToIdFunc
         this.hashString = hashString
         this.serialize = serialize
@@ -81,7 +88,7 @@ export class FetchRecording {
         return toRepresentation({
             requestDataToIdFunc: this.requestDataToIdFunc,
             requestDataToId: this.requestDataToId,
-            idToResponseData: this.idToResponseData,
+            requestIndexToResponseData: this.requestIndexToResponseData,
         })
     }
 }

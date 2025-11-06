@@ -9,7 +9,7 @@ const realFetch = globalThis.fetch
  * @param {Object} mappings - The mappings for request/response handling.
  * @param {Function} mappings.requestDataToIdFunc - Function to convert request data to a unique request ID.
  * @param {Map|Object} mappings.requestDataToId - Map or object mapping request data to IDs.
- * @param {Object} mappings.idToResponseData - Object mapping request IDs to response data.
+ * @param {Object} mappings.requestIndexToResponseData - Object mapping request IDs to response data.
  * @param {Object} [options={}] - Optional configuration.
  * @param {Function} [options.hashString=hashCode] - Function to hash a string.
  * @param {Function} [options.serialize=toRepresentation] - Function to serialize request data.
@@ -23,20 +23,21 @@ const realFetch = globalThis.fetch
  * const dataFromFetchRecording = {
  *   requestDataToIdFunc: (reqData, { hashString, serialize }) => reqData.url + ':' + reqData.method,
  *   requestDataToId: new Map([[{ url: 'https://api.com/data', method: 'GET' }, 'id1']]),
- *   idToResponseData: { id1: { status: 200, body: 'offline data' } }
+ *   requestIndexToResponseData: { id1: { status: 200, body: 'offline data' } }
  * }
  * const shimmedFetch = createFetchShim(dataFromFetchRecording, {fetch});
  * // Now fetch('https://api.com/data') will return the offline response.
  * ```
  */
 export function createFetchShim(
-    { requestDataToIdFunc, requestDataToId, idToResponseData },
+    { requestDataToIdFunc, requestDataToId, requestIndexToResponseData },
     {
         hashString=hashCode,
         serialize=toRepresentation,
         hookForNonMatchingRequests=({ realRequestObject, requestData, requestId, idToResponseTable, idToOfflineRequestTable, urlToIds }) => {},
         ignoreRequestIdCollisions=false,
         fetch=realFetch,
+        debug=false,
     }={}
 ) {
     const allRequestIds = new Set()
@@ -46,22 +47,31 @@ export function createFetchShim(
     // 
     const idToRequest = {}
     const idToResponseGetters = {}
+    const indexOfSavedToRequestId = {}
+    let index = -1
     for (const [requestData, id] of requestDataToId.entries()) {
+        index++
         const requestId = String(requestDataToIdFunc(requestData, { hashString, serialize }))
+        indexOfSavedToRequestId[index] = requestId
         allRequestIds.add(requestId)
         if (!ignoreRequestIdCollisions && idToRequest[requestId]) {
             console.warn(`Two different requests have the same requestId`, "\nprevious one was:", baseToRepresentation(idToRequest[requestId]), "next one is:", baseToRepresentation(requestData), `\n\nThis means you need to give a better \`convertOfflineRequestToId\` argument to the createFetchShim() function like this:\n    createFetchShim({...data, requestDataToIdFunc: (req, { hashString, serialize })=>\`\${req.url}:\${req.method}\`})\n\n`)
         }
         idToRequest[requestId] = requestData
-        idToResponseGetters[requestId] = ()=>responseDataToResponse(idToResponseData[requestId])
+        idToResponseGetters[requestId] = ()=>responseDataToResponse(requestIndexToResponseData[index])
     }
     const outerFetch = fetch
-    return function fetch(resource, options) {
+    return async function fetch(resource, options) {
         const request = new Request(resource, options)
-        const requestData = requestToObject(request)
+        const requestData = await requestToObject(request)
         // e.g. resource, method, postData
         const requestId = requestDataToIdFunc(requestData, { hashString, serialize, originalArgs: [resource, options]})
         if (!allRequestIds.has(requestId)) {
+            if (debug) {
+                console.debug(`request was: `, requestData)
+                console.debug(`which (using the given requestDataToIdFunc) creates this requestId: `, requestId)
+                console.debug(`requestIds from loaded data (by index):`,indexOfSavedToRequestId)
+            }
             var output = hookForNonMatchingRequests({
                 realRequestObject: request,
                 requestData,
