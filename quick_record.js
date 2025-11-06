@@ -1,5 +1,5 @@
 import { FetchRecording } from "./recorder.js";
-const recorder = new FetchRecording()
+export const recorder = new FetchRecording()
 recorder.start()
 export function getData() {
     return recorder.getRecording()

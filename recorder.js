@@ -38,11 +38,11 @@ export async function shimmedFetch(resource, options) {
         }
     }
     return realFetch(resource, options).then(response => {
-        var [ response, recordedData] = wrapAndRecordResponse(response)
-        for (const [recorder, requestId, index] of recordersToSet) {
-            recorder.requestIndexToResponseData[index] = recordedData
+        const [ wrappedResponse, recordedData] = wrapAndRecordResponse(response)
+        for (const [recorder, requestId, indexOfRequest] of recordersToSet) {
+            recorder.requestIndexToResponseData[indexOfRequest] = recordedData
         }
-        return response
+        return wrappedResponse
     })
 }
 

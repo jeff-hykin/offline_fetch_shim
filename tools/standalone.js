@@ -321,70 +321,115 @@ export function wrapAndRecordResponse(response) {
         formData: null,
         streamChunks: [],
     }
-
-    // immutable returns
-    for (const method of ['text', 'blob',]) {
-        monkeyPatch(response, method, (originalMethod) => () => originalMethod().then((data) => {
-            return recordedData[method] = data
-        }))
-    }
-    monkeyPatch(response, 'json', (originalMethod) => () => originalMethod().then((data) => {
-        recordedData.json = structuredClone(data)
-        return data
-    }))
-    monkeyPatch(response, 'arrayBuffer', (originalMethod) => () => originalMethod().then((data) => {
-        recordedData.arrayBuffer = new Uint8Array(data)
-        return data
-    }))
-    monkeyPatch(response, 'formData', (originalMethod) => () => originalMethod().then((data) => {
+    // TODO: right now this is aggressive. Instead this should return a proxy object
+    // patching the object directly leads to a lot of weirdness
+    const formData = response.clone().formData()
+    const bytesData = response.clone().arrayBuffer()
+    formData.then((val)=>{
+        console.log(`here`)
         recordedData.formData = {}
-        for (const [key, value] of data.entries()) {
+        for (const [key, value] of val.entries()) {
             recordedData.formData[key] = value
         }
-        return data
-    }))
+    }).catch((err)=>{
+        bytesData.then((val)=>{
+            const bytes = val
+            try {
+                const decoder = new TextDecoder("utf-8", { fatal: true })
+                const text = decoder.decode(bytes)
+                try {
+                    recordedData.json = JSON.parse(text)
+                } catch (error) {
+                    recordedData.text = text
+                }
+            } catch (error) {
+                recordedData.arrayBuffer = new Uint8Array(bytes)
+            }
+        }).catch((err)=>{
+            console.debug(`response.url ${response.url} got an error getting the bytes:`,err)
+        })
+    })
 
+    // // immutable returns
+    // for (const method of ['text', 'blob',]) {
+    //     const originalMethod = response[method].bind(response)
+    //     response[method] = function () {
+    //         return originalMethod().then(data=>recordedData[method] = data)
+    //     }
+    // }
+    // const originalJsonMethod = response.json.bind(response)
+    // response.json = function () {
+    //     return originalJsonMethod().then(data=>recordedData.json = structuredClone(data))
+    // }
+    // const originalArrayBufferMethod = response.arrayBuffer.bind(response)
+    // response.arrayBuffer = function () {
+    //     return originalArrayBufferMethod().then(data=>recordedData.arrayBuffer = new Uint8Array(data))
+    // }
+    // const originalFromDataMethod = response.formData.bind(response)
+    // response.formData = function () {
+    //     return originalFromDataMethod().then(data=>{
+    //         recordedData.formData = {}
+    //         for (const [key, value] of data.entries()) {
+    //             recordedData.formData[key] = value
+    //         }
+    //         return data
+    //     })
+    // }
+    
     // stream
     let streamIndex = 0
     const recordedChunks = recordedData.streamChunks
-    function patchStream(originalStream) {
-        // patch getReader
-        monkeyPatch(originalStream, 'getReader', (originalGetReader) => {
-            let reader
-            let localIndex = -1
-            const proxyReader = {
-                async read() {
-                    localIndex++
-                    const { done, value } = await reader.read()
-                    if (!done && value) {
-                        if (localIndex > streamIndex) {
-                            streamIndex = localIndex
-                            recordedChunks.push(value.slice(0)) // clone chunk
-                        }
-                    }
-                    return { done, value }
-                },
-                releaseLock() {
-                    return reader.releaseLock()
-                },
-                cancel(reason) {
-                    return reader.cancel(reason)
-                },
-            }
-            return () => {
-                reader = originalGetReader()
-                return proxyReader
-            }
-        })
-        // patch tee
-        monkeyPatch(response.body, 'tee', (originalTee) => () => {
-            const [stream1, stream2] = originalTee()
-            patchStream(stream1)
-            patchStream(stream2)
-            return [stream1, stream2]
-        })
-    }
-    patchStream(response.body)
+    // function patchStream(originalStream) {
+    //     // patch getReader
+    //     monkeyPatch(originalStream, 'getReader', (originalGetReader) => {
+    //         let reader
+    //         let localIndex = -1
+    //         const proxyReader = {
+    //             async read() {
+    //                 localIndex++
+    //                 if (globalThis.promise) {
+    //                     console.log(`waiting for promise for ${response.url}`)
+    //                     await globalThis.promise
+    //                 }
+    //                 const { done, value } = await reader.read()
+    //                 if (!done && value) {
+    //                     if (localIndex > streamIndex) {
+    //                         streamIndex = localIndex
+    //                         console.debug(`recording value is:`,value)
+    //                         recordedChunks.push(value) // clone chunk
+    //                     }
+    //                 }
+    //                 return { done, value }
+    //             },
+    //             releaseLock() {
+    //                 return reader.releaseLock()
+    //             },
+    //             cancel(reason) {
+    //                 return reader.cancel(reason)
+    //             },
+    //         }
+    //         return () => {
+    //             reader = originalGetReader()
+    //             return proxyReader
+    //         }
+    //     })
+    //     // patch tee
+    //     monkeyPatch(response.body, 'tee', (originalTee) => () => {
+    //         const [stream1, stream2] = originalTee()
+    //         patchStream(stream1)
+    //         patchStream(stream2)
+    //         return [stream1, stream2]
+    //     })
+    // }
+    // patchStream(response.body)
+    // let clone = response.clone()
+    // monkeyPatch(response.body, 'getReader', (original) => () => {
+    //     clone.arrayBuffer().then((arrayBuffer)=>{
+    //         let val = JSON.stringify([...new Uint8Array(arrayBuffer)])
+    //         recordedData.arrayBuffer = [ Math.random(), response.url, new Uint8Array(arrayBuffer) ]
+    //     })
+    //     return original()
+    // })
 
     return [response, recordedData]
 }
@@ -438,12 +483,16 @@ export function responseDataToResponse(meta) {
         body = formData
     } else if (meta.streamChunks && meta.streamChunks.length > 0) {
         // Combine Uint8Array chunks into a Blob
-        body = new Blob(meta.streamChunks)
+        body = new Blob(meta.streamChunks, { type: meta.headers?.['content-type'] })
     }
 
-    return new Response(body, {
+    let output = new Response(body, {
         status: meta.status,
         statusText: meta.statusText,
         headers: meta.headers,
+        url: meta.url,
     })
+    // output.arrayBuffer().then((a)=>console.debug(`output.arrayBuffer is:`,a))
+    
+    return output
 }
