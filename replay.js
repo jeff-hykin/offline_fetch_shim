@@ -51,7 +51,8 @@ export function createFetchShim(
     let index = -1
     for (const [requestData, id] of requestDataToId.entries()) {
         index++
-        const requestId = String(requestDataToIdFunc(requestData, { hashString, serialize }))
+        const { fetchIndex, ...realRequestData } = requestData
+        const requestId = String(requestDataToIdFunc(realRequestData, { hashString, serialize, fetchIndex }))
         indexOfSavedToRequestId[index] = requestId
         allRequestIds.add(requestId)
         if (!ignoreRequestIdCollisions && idToRequest[requestId]) {
@@ -65,12 +66,14 @@ export function createFetchShim(
         const request = new Request(resource, options)
         const requestData = await requestToObject(request)
         // e.g. resource, method, postData
-        const requestId = requestDataToIdFunc(requestData, { hashString, serialize, originalArgs: [resource, options]})
+        const { fetchIndex, ...realRequestData } = requestData
+        const requestId = String(requestDataToIdFunc(realRequestData, { hashString, serialize, originalArgs: [resource, options], fetchIndex}))
         if (!allRequestIds.has(requestId)) {
             if (debug) {
                 console.debug(`request was: `, requestData)
                 console.debug(`which (using the given requestDataToIdFunc) creates this requestId: `, requestId)
                 console.debug(`requestIds from loaded data (by index):`,indexOfSavedToRequestId)
+                console.debug(`allRequestIds is:`,allRequestIds)
             }
             var output = hookForNonMatchingRequests({
                 realRequestObject: request,
@@ -85,6 +88,7 @@ export function createFetchShim(
             }
             return outerFetch(resource, options)
         }
-        return Promise.resolve(idToResponseGetters[requestId]())
+        let response = idToResponseGetters[requestId]()
+        return Promise.resolve(response)
     }
 }

@@ -1,3 +1,4 @@
+
 // import { serializeFetchArgs, deserializeFetchArg, } from './tools/generic.js'
 import { hashCode, monkeyPatch, requestToObject, objectToRequest, wrapAndRecordResponse, responseDataToResponse } from './tools/standalone.js'
 import { toRepresentation } from './tools/generic.js'
@@ -20,7 +21,8 @@ export async function shimmedFetch(resource, options) {
     const recordersToSet = []
     // const serialized = await serializeFetchArgs(resource, options)
     for (const eachRecorder of activeRecorders) {
-        const id = await eachRecorder.requestDataToIdFunc(requestObj, {hashString:eachRecorder.hashString, serialize:eachRecorder.serialize})
+        const { fetchIndex, ...realRequestObj } = requestObj
+        const id = String(eachRecorder.requestDataToIdFunc(realRequestObj, {hashString:eachRecorder.hashString, serialize:eachRecorder.serialize, fetchIndex}))
         eachRecorder.requestDataToId.set(requestObj, id)
         let index = -1
         for (const [key, value] of eachRecorder.requestDataToId.entries()) {
