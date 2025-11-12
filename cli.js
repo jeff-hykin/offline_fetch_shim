@@ -49,7 +49,7 @@ var globalThis = {...eval?.("globalThis"), fetch: (...args)=>{
                 console.log("writing to path:",path)
                 await FileSystem.write({path, data: jsFileString, overwrite: true})
                 const varName = toCamelCase(filePath+"_uint8Array")
-                offlineFilesText += \`import \${varName} from \${JSON.stringify(filePath+'.js')}\\nfiles[\${JSON.stringify(filePath+'.js')}] = \${varName}\\n\`
+                offlineFilesText += \`import \${varName} from \${JSON.stringify("./"+filePath+'.js')}\\nfiles[\${JSON.stringify(filePath+'.js')}] = \${varName}\\n\`
                 // update the offlineFiles
                 await FileSystem.write({path:offlineFilesPath, data: offlineFilesText, overwrite: true})
             }
@@ -70,7 +70,7 @@ ${fileText}
 // thing that uses the offline files
 await FileSystem.write({
     path: replayerPath, data: `
-import files from ${JSON.stringify(offlineFilesPath)}
+import files from ${JSON.stringify("./"+FileSystem.basename(offlineFilesPath))}
 const builtinFetch = eval?.("fetch")
 const baseUrl = import.meta.url.split("/").slice(0, -1).join("/")
 import { FileSystem, glob } from "https://deno.land/x/quickr@0.8.6/main/file_system.js"
