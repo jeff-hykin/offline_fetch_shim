@@ -11,7 +11,7 @@ const jsDeliverPath = `https://cdn.jsdelivr.net/npm/${npmPackageName}/`
 // await $$`false`.text("stderr")
 // await $$`false`.text("combined")
 // await $$`echo`.stdinText("yes\n")
-console.debug(`jsDeliverPath is:`,jsDeliverPath)
+// console.debug(`jsDeliverPath is:`,jsDeliverPath)
 const packageJson = await (await fetch(`${jsDeliverPath}package.json`)).json()
 const pathToMain = normalizePath(getMainFile(packageJson))
 const jsDeliverPrefix = FileSystem.dirname(jsDeliverPath+pathToMain).replace(/\/+$/,"")+"/"
@@ -49,7 +49,7 @@ var globalThis = {...eval?.("globalThis"), fetch: (...args)=>{
                 console.log("writing to path:",path)
                 await FileSystem.write({path, data: jsFileString, overwrite: true})
                 const varName = toCamelCase(filePath+"_uint8Array")
-                offlineFilesText += \`import \${varName} from \${JSON.stringify("./"+filePath+'.js')}\\nfiles[\${JSON.stringify(filePath+'.js')}] = \${varName}\\n\`
+                offlineFilesText += \`import \${varName} from \${JSON.stringify("./"+filePath+'.js')}\\nfiles[\${JSON.stringify(filePath)}] = \${varName}\\n\`
                 // update the offlineFiles
                 await FileSystem.write({path:offlineFilesPath, data: offlineFilesText, overwrite: true})
             }
@@ -71,6 +71,7 @@ ${fileText}
 await FileSystem.write({
     path: replayerPath, data: `
 import files from ${JSON.stringify("./"+FileSystem.basename(offlineFilesPath))}
+const jsDeliverPrefix = ${escapeJsString(jsDeliverPrefix)}
 const builtinFetch = eval?.("fetch")
 const baseUrl = import.meta.url.split("/").slice(0, -1).join("/")
 import { FileSystem, glob } from "https://deno.land/x/quickr@0.8.6/main/file_system.js"
@@ -79,17 +80,17 @@ var globalThis = {...eval?.("globalThis"), fetch: (...args)=>{
     const url = req.url
     if (url.startsWith(baseUrl)) {
         // use the offline files first, but we will fallback to the jsdelivr patch if no files are matched
-        req = new Request(\`${escapeJsString(jsDeliverPath).slice(1, -1)}\${req.url.slice(baseUrl.length+1)}\`, req)
+        req = new Request(\`\${jsDeliverPrefix}\${req.url.slice(baseUrl.length+1)}\`, req)
         for (const [filePath, fileContents] of Object.entries(files)) {
             if (url.endsWith("/"+filePath)) {
                 const headers = {}
-                if (filePath.endsWith(".js.js")) {
+                if (filePath.endsWith(".js")) {
                     headers['content-type'] = 'application/javascript'
-                } else if (filePath.endsWith(".json.js")) {
+                } else if (filePath.endsWith(".json")) {
                     headers['content-type'] = 'application/json'
-                } else if (filePath.endsWith(".txt.js")) {
+                } else if (filePath.endsWith(".txt")) {
                     headers['content-type'] = 'text/plain'
-                } else if (filePath.endsWith(".wasm.js")) {
+                } else if (filePath.endsWith(".wasm")) {
                     headers['content-type'] = 'application/wasm'
                 }
                 return Promise.resolve(new Response(fileContents, {
@@ -101,7 +102,7 @@ var globalThis = {...eval?.("globalThis"), fetch: (...args)=>{
             }
         }
     }
-    console.log(\`fetching \${req.url}\`)
+    console.log(\`fetch falling back on: \${req.url}\`)
     return builtinFetch(req)
 }}
 var fetch = globalThis.fetch
@@ -113,7 +114,7 @@ ${fileText}
 })
 console.log(`in a repl run:\n`)
 console.log(`import * as thing from ${JSON.stringify(recorderPath)}`)
-console.log(`\n// then, after loading stuff, try bundling:\n`)
+console.log(`\n// then, after using it (it'll record the fetches), try bundling:\n`)
 console.log(`import * as thing from ${JSON.stringify(replayerPath)}`)
 
 

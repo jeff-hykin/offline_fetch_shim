@@ -4,6 +4,38 @@ If there's some JS code that uses fetch, and you want to make it work offline (m
 
 # How to use
 
+## If you're trying to make an npm package work offline (for others)
+
+```sh
+# Install this cli tool:
+deno install -n offjs -Afgr https://raw.githubusercontent.com/jeff-hykin/offline_fetch_shim/master/cli.js
+
+# create a place to download the files
+mkdir -p offline_clang
+cd offline_clang
+
+# use the cli tool
+npm_module_name="@yowasp/clang"
+offjs "$npm_module_name"
+
+#
+# record the fetches (online)
+#
+# load the ./$npm_module_name.recorder.js file
+deno repl
+> import { runClang } from './@yowasp_clang.recorder.js'
+> // cause the NPM module to trigger fetch-requests (this step is different for each NPM module)
+> var { hello } = await runClang(['clang++', 'test.cc', '-o', 'hello'], {"test.cc": `#include <iostream>\nint main() { std::cout << "hello" << std::endl; }`})
+> // ^this causes fetches, which then get recorded and dumped to a file system
+> ctrl+C
+
+# 
+# bundle the recording (offline)
+# 
+deno bundle ./@yowasp_clang.replayer.js > offline_bundle.js
+# send that bundle to whoever, and they won't need internet to use it
+```
+
 ## If you're using a browser
 
 1. Get the data offline data as a HAR file
