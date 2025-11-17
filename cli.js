@@ -74,7 +74,6 @@ import files from ${JSON.stringify("./"+FileSystem.basename(offlineFilesPath))}
 const jsDeliverPrefix = ${escapeJsString(jsDeliverPrefix)}
 const builtinFetch = eval?.("fetch")
 const baseUrl = import.meta.url.split("/").slice(0, -1).join("/")
-import { FileSystem, glob } from "https://deno.land/x/quickr@0.8.6/main/file_system.js"
 var globalThis = {...eval?.("globalThis"), fetch: (...args)=>{
     let req = new Request(...args)
     const url = req.url
